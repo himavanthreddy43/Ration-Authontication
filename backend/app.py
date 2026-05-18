@@ -61,8 +61,10 @@ def create_app():
         
     return app
 
+# Export app globally for Gunicorn
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
     logger.info("Starting Smart Ration Backend Server...")
     app.run(debug=True, port=5000)
 
