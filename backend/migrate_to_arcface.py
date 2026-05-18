@@ -1,77 +1,178 @@
 import os
 import sys
 import json
-import cv2
 import logging
-from flask import Flask
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-from deepface import DeepFace
+# ============================================
+# Add Current Directory to Python Path
+# ============================================
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# ============================================
+# Configure Logging
+# ============================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
+
+# ============================================
+# Import Dependencies
+# ============================================
+
+from deepface import DeepFace
+from app import create_app
 from models import db, FaceData
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ration.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
+# ============================================
+# Create Flask App (uses correct DB config)
+# ============================================
+
+app = create_app()
+
+# ============================================
+# Migration Function
+# ============================================
 
 def migrate():
+
     with app.app_context():
+
         faces = FaceData.query.all()
-        logger.info(f"Found {len(faces)} faces to re-migrate.")
-        
+
+        logger.info(f"Found {len(faces)} faces to migrate.")
+
         success_count = 0
         fail_count = 0
         deleted_count = 0
-        
+
         for face in faces:
+
             image_path = face.face_image_path
-            logger.info(f"Processing face_id {face.face_id} at {image_path}")
-            
-            if not os.path.exists(image_path):
-                logger.error(f"Image not found at {image_path}")
+
+            logger.info(f"Processing face_id={face.face_id}")
+
+            # ============================================
+            # Check image exists
+            # ============================================
+
+            if not image_path or not os.path.exists(image_path):
+
+                logger.error(f"Image not found: {image_path}")
                 fail_count += 1
                 continue
-                
+
             try:
-                img = cv2.imread(image_path)
-                if img is None:
-                    logger.error(f"Failed to read image at {image_path}")
-                    fail_count += 1
-                    continue
-                    
-                rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                
+
                 objs = None
+
+                # ============================================
+                # Strategy 1 - OpenCV detector
+                # ============================================
+
                 try:
-                    objs = DeepFace.represent(img_path=rgb_img, model_name="ArcFace", detector_backend="opencv", enforce_detection=True, align=True)
-                except ValueError:
-                    logger.info("OpenCV detection failed, trying MTCNN.")
+                    logger.info("Trying OpenCV detector...")
+
+                    objs = DeepFace.represent(
+                        img_path=image_path,
+                        model_name="ArcFace",
+                        detector_backend="opencv",
+                        enforce_detection=True,
+                        align=True
+                    )
+
+                except Exception as e:
+                    logger.warning(f"OpenCV failed: {e}")
+
+                # ============================================
+                # Strategy 2 - MTCNN fallback
+                # ============================================
+
+                if not objs:
+
                     try:
-                        objs = DeepFace.represent(img_path=rgb_img, model_name="ArcFace", detector_backend="mtcnn", enforce_detection=True, align=True)
-                    except ValueError:
-                        pass
-                
+                        logger.info("Trying MTCNN detector...")
+
+                        objs = DeepFace.represent(
+                            img_path=image_path,
+                            model_name="ArcFace",
+                            detector_backend="mtcnn",
+                            enforce_detection=True,
+                            align=True
+                        )
+
+                    except Exception as e:
+                        logger.warning(f"MTCNN failed: {e}")
+
+                # ============================================
+                # Process Embedding
+                # ============================================
+
                 if objs and len(objs) > 0:
-                    embedding = objs[0]['embedding']
-                    face.face_embedding_vector = json.dumps(embedding)
-                    db.session.commit()
-                    success_count += 1
-                    logger.info(f"Successfully migrated face_id {face.face_id}")
+
+                    embedding = objs[0].get("embedding")
+
+                    if embedding and len(embedding) > 0:
+
+                        face.face_embedding_vector = json.dumps(embedding)
+                        success_count += 1
+
+                        logger.info(
+                            f"Successfully migrated face_id={face.face_id}"
+                        )
+
+                    else:
+                        logger.error(
+                            f"Empty embedding for face_id={face.face_id}"
+                        )
+                        db.session.delete(face)
+                        deleted_count += 1
+
                 else:
-                    logger.error(f"NO FACE DETECTED for face_id {face.face_id}. Deleting garbage face data.")
+                    logger.error(
+                        f"No face detected for face_id={face.face_id}"
+                    )
                     db.session.delete(face)
-                    db.session.commit()
                     deleted_count += 1
+
             except Exception as e:
-                logger.error(f"Error processing face_id {face.face_id}: {e}")
+                logger.error(
+                    f"Unexpected error for face_id={face.face_id}: {e}"
+                )
                 fail_count += 1
-                
-        logger.info(f"Migration completed. Success: {success_count}, Deleted (Garbage): {deleted_count}, Failed: {fail_count}")
+
+        # ============================================
+        # Final Commit
+        # ============================================
+
+        try:
+            db.session.commit()
+            logger.info("Database commit successful.")
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Database commit failed: {e}")
+
+        # ============================================
+        # Final Summary
+        # ============================================
+
+        logger.info("=" * 50)
+        logger.info(
+            f"Migration Completed\n"
+            f"  Success: {success_count}\n"
+            f"  Deleted: {deleted_count}\n"
+            f"  Failed: {fail_count}"
+        )
+        logger.info("=" * 50)
+
+# ============================================
+# Main
+# ============================================
 
 if __name__ == '__main__':
     migrate()

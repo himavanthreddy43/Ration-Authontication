@@ -34,6 +34,11 @@ def create_app():
     db.init_app(app)
     app.register_blueprint(api_bp, url_prefix='/api')
     
+    # Root health check route
+    @app.route('/')
+    def home():
+        return jsonify({"status": "ok", "message": "Smart Ration Backend is running"}), 200
+    
     # Global Error Handlers
     @app.errorhandler(400)
     def bad_request(error):
@@ -60,3 +65,4 @@ if __name__ == '__main__':
     app = create_app()
     logger.info("Starting Smart Ration Backend Server...")
     app.run(debug=True, port=5000)
+
