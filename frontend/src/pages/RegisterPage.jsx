@@ -1,4 +1,4 @@
-﻿import Webcam from 'react-webcam';
+import Webcam from 'react-webcam';
 import axios from 'axios';
 import { Camera, UserPlus, CheckCircle2, User, HelpCircle, X, Loader2, ImagePlus } from 'lucide-react';
 import { useState, useRef, useCallback } from 'react';
@@ -60,7 +60,7 @@ export default function RegisterPage() {
     const submitFamily = async () => {
         try {
             setIsSubmitting(true);
-            await axios.post('https://ration-authontication-1.onrender.com/api/family/register', familyData);
+            await axios.post('http://localhost:5000/api/family/register', familyData);
             alert('Family Registered Successfully!');
             setStep(1);
             setFamilyData({
@@ -303,7 +303,7 @@ export default function RegisterPage() {
                                                 </div>
                                                 <div>
                                                     <div className="font-semibold text-zinc-800 leading-tight">{m.name}</div>
-                                                    <div className="text-xs text-zinc-500 mt-0.5">{m.relationship} â€¢ {m.age} yrs</div>
+                                                    <div className="text-xs text-zinc-500 mt-0.5">{m.relationship} • {m.age} yrs</div>
                                                 </div>
                                             </div>
                                         ))

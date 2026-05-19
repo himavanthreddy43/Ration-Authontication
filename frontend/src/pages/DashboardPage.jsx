@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Users, ScanFace, CheckCircle2, AlertCircle, Calendar, ArrowUpRight, Activity, X, Loader2, Phone, MessageSquare, ChevronDown, Package } from 'lucide-react';
 
@@ -30,11 +30,11 @@ export default function DashboardPage() {
     const [selectedDay, setSelectedDay] = useState(null);
 
     useEffect(() => {
-        axios.get('https://ration-authontication-1.onrender.com/api/stats')
+        axios.get('http://localhost:5000/api/stats')
             .then(res => setStatsData(res.data))
             .catch(err => console.error("Failed to fetch stats", err));
             
-        axios.get('https://ration-authontication-1.onrender.com/api/dashboard_data')
+        axios.get('http://localhost:5000/api/dashboard_data')
             .then(res => setDashboardData(res.data))
             .catch(err => console.error("Failed to fetch dashboard data", err));
     }, []);
@@ -61,7 +61,7 @@ export default function DashboardPage() {
         setActiveListType(type);
         setIsLoadingList(true);
         try {
-            const res = await axios.get(`https://ration-authontication-1.onrender.com/api/dashboard/details?type=${type}`);
+            const res = await axios.get(`http://localhost:5000/api/dashboard/details?type=${type}`);
             setListData(res.data);
         } catch(err) {
             console.error("Failed to fetch list", err);

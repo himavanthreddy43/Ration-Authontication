@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { Users, Search, Edit2, Trash2, ChevronDown, ChevronUp, UserX, UserMinus, ShieldAlert, Check, X, Loader2, UserPlus, Camera, ImagePlus } from 'lucide-react';
 import Webcam from 'react-webcam';
@@ -38,7 +38,7 @@ export default function FamiliesPage() {
     const handleSaveMemberDetails = async () => {
         setIsSavingMember(true);
         try {
-            await axios.put(`https://ration-authontication-1.onrender.com/api/family_members/${selectedMember.member_id}`, editMemberForm);
+            await axios.put(`http://localhost:5000/api/family_members/${selectedMember.member_id}`, editMemberForm);
             fetchFamilies();
             setSelectedMember({...selectedMember, ...editMemberForm});
             setIsEditingMember(false);
@@ -53,7 +53,7 @@ export default function FamiliesPage() {
     const handleDeleteSelectedMember = async () => {
         if (!window.confirm("Are you sure you want to delete this member? Their face data will be permanently removed.")) return;
         try {
-            await axios.delete(`https://ration-authontication-1.onrender.com/api/family_members/${selectedMember.member_id}`);
+            await axios.delete(`http://localhost:5000/api/family_members/${selectedMember.member_id}`);
             fetchFamilies();
             setSelectedMember(null);
             setIsEditingMember(false);
@@ -70,7 +70,7 @@ export default function FamiliesPage() {
         }
         if (!window.confirm("Delete this face image?")) return;
         try {
-            await axios.delete(`https://ration-authontication-1.onrender.com/api/face/${faceId}`);
+            await axios.delete(`http://localhost:5000/api/face/${faceId}`);
             const updatedImages = selectedMember.images.filter(img => img.face_id !== faceId);
             setSelectedMember({...selectedMember, images: updatedImages});
             fetchFamilies();
@@ -90,7 +90,7 @@ export default function FamiliesPage() {
     const saveNewFace = async (imageSrc) => {
         setIsSavingFace(true);
         try {
-            const res = await axios.post(`https://ration-authontication-1.onrender.com/api/family_members/${selectedMember.member_id}/face`, { image: imageSrc });
+            const res = await axios.post(`http://localhost:5000/api/family_members/${selectedMember.member_id}/face`, { image: imageSrc });
             const newFace = res.data.face;
             setSelectedMember({...selectedMember, images: [...(selectedMember.images || []), newFace]});
             fetchFamilies();
@@ -122,7 +122,7 @@ export default function FamiliesPage() {
                 ...newMember,
                 images: newMemberImages
             };
-            const res = await axios.post(`https://ration-authontication-1.onrender.com/api/family/${familyId}/member`, payload);
+            const res = await axios.post(`http://localhost:5000/api/family/${familyId}/member`, payload);
             
             // Update local state
             setFamilies(families.map(f => {
@@ -151,7 +151,7 @@ export default function FamiliesPage() {
     const fetchFamilies = async () => {
         setIsLoading(true);
         try {
-            const res = await axios.get('https://ration-authontication-1.onrender.com/api/families');
+            const res = await axios.get('http://localhost:5000/api/families');
             setFamilies(res.data);
         } catch (error) {
             console.error("Failed to fetch families", error);
@@ -179,7 +179,7 @@ export default function FamiliesPage() {
         if (!window.confirm("Are you sure you want to permanently delete this family and all associated data (faces, members, ration history)?")) return;
         
         try {
-            await axios.delete(`https://ration-authontication-1.onrender.com/api/families/${familyId}`);
+            await axios.delete(`http://localhost:5000/api/families/${familyId}`);
             setFamilies(families.filter(f => f.family_id !== familyId));
             if (expandedFamily === familyId) setExpandedFamily(null);
         } catch (error) {
@@ -192,7 +192,7 @@ export default function FamiliesPage() {
         if (!window.confirm("Are you sure you want to delete this member? Their face data will be permanently removed.")) return;
         
         try {
-            await axios.delete(`https://ration-authontication-1.onrender.com/api/family_members/${memberId}`);
+            await axios.delete(`http://localhost:5000/api/family_members/${memberId}`);
             // Update local state
             setFamilies(families.map(f => {
                 if (f.family_id === familyId) {
@@ -220,7 +220,7 @@ export default function FamiliesPage() {
     const saveEdit = async () => {
         setIsSaving(true);
         try {
-            await axios.put(`https://ration-authontication-1.onrender.com/api/families/${editingFamily}`, editForm);
+            await axios.put(`http://localhost:5000/api/families/${editingFamily}`, editForm);
             setFamilies(families.map(f => f.family_id === editingFamily ? { ...f, ...editForm } : f));
             setEditingFamily(null);
         } catch (error) {
@@ -463,7 +463,7 @@ export default function FamiliesPage() {
                                                 <div key={member.member_id} onClick={() => setSelectedMember(member)} className="bg-white border border-zinc-200 rounded-xl p-3 flex items-center justify-between hover:border-blue-300 hover:shadow-md cursor-pointer transition-all shadow-sm group">
                                                     <div>
                                                         <p className="font-bold text-zinc-800 text-sm group-hover:text-blue-700 transition-colors">{member.name}</p>
-                                                        <p className="text-xs text-zinc-500 mt-0.5">{member.relationship} â€¢ {member.age} yrs â€¢ {member.gender}</p>
+                                                        <p className="text-xs text-zinc-500 mt-0.5">{member.relationship} • {member.age} yrs • {member.gender}</p>
                                                     </div>
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteMember(member.member_id, family.family_id); }}
@@ -512,7 +512,7 @@ export default function FamiliesPage() {
                             ) : (
                                 <div>
                                     <h3 className="text-xl font-bold text-zinc-900">{selectedMember.name}</h3>
-                                    <p className="text-sm text-zinc-500 font-medium">{selectedMember.relationship} â€¢ {selectedMember.age} yrs â€¢ {selectedMember.gender}</p>
+                                    <p className="text-sm text-zinc-500 font-medium">{selectedMember.relationship} • {selectedMember.age} yrs • {selectedMember.gender}</p>
                                 </div>
                             )}
                             <div className="flex items-start gap-1">

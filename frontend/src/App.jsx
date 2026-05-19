@@ -6,6 +6,7 @@ import RecognizePage from './pages/RecognizePage';
 import DashboardPage from './pages/DashboardPage';
 import FamiliesPage from './pages/FamiliesPage';
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import AIChatbot from './components/AIChatbot';
 
 function Home() {
@@ -130,6 +131,7 @@ export default function App() {
           <main className="max-w-7xl mx-auto relative z-10">
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
               <Route path="/register" element={<ProtectedRoute><RegisterPage /></ProtectedRoute>} />
               <Route path="/recognize" element={<ProtectedRoute><RecognizePage /></ProtectedRoute>} />
