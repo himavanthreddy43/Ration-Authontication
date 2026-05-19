@@ -15,7 +15,7 @@ export default function RecognizePage() {
         setStatus('scanning');
 
         try {
-            const res = await axios.post('http://localhost:5000/api/recognize', { image: imageSrc });
+            const res = await axios.post('https://ration-authontication-1.onrender.com/api/recognize', { image: imageSrc });
             setFamilyDetails(res.data);
             setStatus('success');
         } catch (error) {
@@ -26,7 +26,7 @@ export default function RecognizePage() {
 
     const markRationCollected = async () => {
         try {
-            await axios.post(`http://localhost:5000/api/family/${familyDetails.family_id}/mark_ration`);
+            await axios.post(`https://ration-authontication-1.onrender.com/api/family/${familyDetails.family_id}/mark_ration`);
             setFamilyDetails(prev => ({ ...prev, already_received_this_month: true }));
             alert('Ration successfully marked for this month!');
         } catch (error) {

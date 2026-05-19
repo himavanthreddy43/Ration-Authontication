@@ -60,7 +60,7 @@ export default function RegisterPage() {
     const submitFamily = async () => {
         try {
             setIsSubmitting(true);
-            await axios.post('http://localhost:5000/api/family/register', familyData);
+            await axios.post('https://ration-authontication-1.onrender.com/api/family/register', familyData);
             alert('Family Registered Successfully!');
             setStep(1);
             setFamilyData({

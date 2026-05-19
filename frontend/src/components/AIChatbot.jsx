@@ -27,7 +27,7 @@ export default function AIChatbot() {
         setIsLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:5000/api/chat', { message: userText });
+            const response = await axios.post('https://ration-authontication-1.onrender.com/api/chat', { message: userText });
             setMessages(prev => [...prev, { role: 'assistant', text: response.data.response }]);
         } catch (error) {
             console.error('Chat error:', error);
