@@ -32,30 +32,38 @@ export default function RegisterPage() {
     const webcamRef = useRef(null);
 
     const capture = useCallback(async () => {
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (imageSrc) {
-            try {
-                // Convert base64 to Blob
-                const res = await fetch(imageSrc);
-                const blob = await res.blob();
-                
-                // Upload to backend immediately
-                const formData = new FormData();
-                formData.append('file', blob, 'webcam.jpg');
-                
-                const uploadRes = await axios.post('/api/upload_image', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                
-                setCapturedImages(prev => [...prev, {
-                    serverFilename: uploadRes.data.filename,
-                    previewUrl: imageSrc
-                }]);
-            } catch (error) {
-                console.error("Failed to upload image:", error);
-                alert("Failed to upload image. Please check your connection.");
-            }
+        if (!webcamRef.current) {
+            alert("Camera is not ready yet. Please wait a moment.");
+            return;
         }
+        const imageSrc = webcamRef.current.getScreenshot();
+        if (!imageSrc) {
+            alert("Unable to capture image from camera. Please ensure camera permission is allowed and video has started.");
+            return;
+        }
+
+        let serverFilename = null;
+        try {
+            const res = await fetch(imageSrc);
+            const blob = await res.blob();
+            const formData = new FormData();
+            formData.append('file', blob, 'webcam.jpg');
+            
+            const uploadRes = await axios.post('/api/upload_image', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            if (uploadRes.data && uploadRes.data.filename) {
+                serverFilename = uploadRes.data.filename;
+            }
+        } catch (error) {
+            console.warn("Server pre-upload failed, using local image data:", error);
+        }
+
+        // Always save image locally (serverFilename if uploaded, otherwise full base64 data)
+        setCapturedImages(prev => [...prev, {
+            serverFilename: serverFilename || imageSrc,
+            previewUrl: imageSrc
+        }]);
     }, [webcamRef]);
 
     const removeImage = (index) => {
@@ -274,22 +282,36 @@ export default function RegisterPage() {
                                             onUserMediaError={() => alert("Camera access denied or hardware error. Please check your browser permissions.")}
                                             className="w-full h-full object-cover"
                                         />
-                                        <button
+                                         <button
+                                            type="button"
                                             onClick={toggleCamera}
-                                            className="absolute top-4 right-4 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all"
+                                            className="absolute top-4 right-4 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all z-10"
                                             title="Switch Camera"
                                         >
                                             <RefreshCcw size={20} />
                                         </button>
-                                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-center opacity-100 transition-opacity z-10">
                                             <button
+                                                type="button"
                                                 onClick={capture}
-                                                className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white px-6 py-2 rounded-full flex items-center space-x-2 font-medium transition-all"
+                                                className="bg-blue-600 hover:bg-blue-700 backdrop-blur-md text-white px-6 py-2.5 rounded-full flex items-center space-x-2 font-medium shadow-lg shadow-blue-600/40 transition-all transform hover:scale-105 active:scale-95"
                                             >
                                                 <Camera size={18} />
                                                 <span>Snap Photo</span>
                                             </button>
                                         </div>
+                                    </div>
+
+                                    {/* Dedicated Snap Control */}
+                                    <div className="flex justify-center pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={capture}
+                                            className="w-full sm:w-auto bg-blue-600 text-white font-semibold px-6 py-3 rounded-xl flex items-center justify-center space-x-2 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all"
+                                        >
+                                            <Camera size={20} />
+                                            <span>Take Snap ({capturedImages.length} captured)</span>
+                                        </button>
                                     </div>
 
                                     {/* Thumbnail gallery */}
@@ -299,15 +321,16 @@ export default function RegisterPage() {
                                                 <div key={i} className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 border-blue-500 group">
                                                     <img src={img.previewUrl} alt={`capture-${i}`} className="w-full h-full object-cover" />
                                                     <button
+                                                        type="button"
                                                         onClick={() => removeImage(i)}
-                                                        className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded-full opacity-100 transition-opacity"
                                                     >
                                                         <X size={12} />
                                                     </button>
                                                 </div>
                                             ))}
                                             {capturedImages.length < 5 && (
-                                                <button onClick={capture} className="flex-shrink-0 w-20 h-20 rounded-lg border-2 border-dashed border-zinc-300 text-zinc-400 hover:border-blue-400 hover:text-blue-500 flex flex-col items-center justify-center transition-colors">
+                                                <button type="button" onClick={capture} className="flex-shrink-0 w-20 h-20 rounded-lg border-2 border-dashed border-zinc-300 text-zinc-400 hover:border-blue-400 hover:text-blue-500 flex flex-col items-center justify-center transition-colors">
                                                     <ImagePlus size={20} />
                                                     <span className="text-xs mt-1 font-medium">Add More</span>
                                                 </button>
