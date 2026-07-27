@@ -7,4 +7,4 @@ nixPkgs = ["python310"]
 cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "gunicorn --chdir backend app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120"
+cmd = "sh -c \"if [ -d backend ]; then cd backend; fi; exec gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120\""
