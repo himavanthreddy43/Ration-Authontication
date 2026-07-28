@@ -229,35 +229,42 @@ def _cleanup_saved_files(filenames):
                 pass
 
 def process_unprocessed_faces(family_id=None):
-    """Processes any faces that do not have an embedding yet."""
-    query = FaceData.query.filter(FaceData.face_embedding_vector == None)
-    if family_id:
-        query = query.filter_by(family_id=family_id)
-        
-    unprocessed = query.all()
-    processed_count = 0
-    if not unprocessed:
-        return 0
-        
-    for face in unprocessed:
-        full_path = os.path.join(UPLOAD_FOLDER, face.face_image_path)
-        if os.path.exists(full_path):
-            import face_utils
-            embedding = face_utils.extract_embedding(full_path)
-            if embedding is not None:
-                face.face_embedding_vector = json.dumps(embedding)
-                processed_count += 1
+    """Processes any faces that do not have an embedding vector yet."""
+    try:
+        query = FaceData.query.filter(
+            (FaceData.face_embedding_vector == None) |
+            (FaceData.face_embedding_vector == "") |
+            (FaceData.face_embedding_vector == "NO_FACE")
+        )
+        if family_id:
+            query = query.filter_by(family_id=family_id)
+            
+        unprocessed = query.all()
+        processed_count = 0
+        if not unprocessed:
+            return 0
+            
+        import face_utils
+        for face in unprocessed:
+            full_path = os.path.join(UPLOAD_FOLDER, face.face_image_path)
+            if os.path.exists(full_path):
+                embedding = face_utils.extract_embedding(full_path)
+                if embedding is not None:
+                    face.face_embedding_vector = json.dumps(embedding)
+                    processed_count += 1
+                else:
+                    logger.warning(f"Failed to extract embedding for face {face.face_id}")
+                    face.face_embedding_vector = "NO_FACE"
             else:
-                logger.warning(f"Failed to extract embedding for face {face.face_id}")
+                logger.warning(f"Image path does not exist for face {face.face_id}: {full_path}")
                 face.face_embedding_vector = "NO_FACE"
-        else:
-            logger.warning(f"Image path does not exist for face {face.face_id}: {full_path}")
-            face.face_embedding_vector = "NO_FACE"
-                
-    db.session.commit()
-    refresh_face_cache()
-        
-    return processed_count
+                    
+        db.session.commit()
+        refresh_face_cache()
+        return processed_count
+    except Exception as e:
+        logger.error(f"Error in process_unprocessed_faces: {e}")
+        return 0
 
 @api_bp.route('/process_faces/<int:family_id>', methods=['POST'])
 def process_faces_endpoint(family_id):
@@ -299,12 +306,16 @@ def recognize():
                     pass
                     
         if scanned_embedding is None:
-            import shutil
-            failed_filename = f"failed_noface_{uuid.uuid4().hex}.jpg"
-            shutil.copy(temp_path, os.path.join(UPLOAD_FOLDER, failed_filename))
-            failed_log = FailedScanLog(image_path=failed_filename, reason="No face detected in image")
-            db.session.add(failed_log)
-            db.session.commit()
+            try:
+                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                failed_filename = f"failed_noface_{uuid.uuid4().hex}.jpg"
+                shutil.copy(temp_path, os.path.join(UPLOAD_FOLDER, failed_filename))
+                failed_log = FailedScanLog(image_path=failed_filename, reason="No face detected in image")
+                db.session.add(failed_log)
+                db.session.commit()
+            except Exception as log_err:
+                logger.warning(f"Failed to log failed scan: {log_err}")
+
             return jsonify({"error": "No face detected in the provided image"}), 400
             
         global CACHE_INITIALIZED
@@ -330,8 +341,6 @@ def recognize():
             if not family or not member:
                 return jsonify({"error": "Data internal consistency error. Family or member not found."}), 500
             
-            # Check attendance (Phase 5)
-            # Use timezone aware datetimes using timezone.utc
             now = datetime.now(timezone.utc)
             current_month = now.month
             current_year = now.year
@@ -355,20 +364,27 @@ def recognize():
                 "rice_quantity_kg": family.family_members_count * 6
             }), 200
                 
-        import shutil
-        failed_filename = f"failed_nomatch_{uuid.uuid4().hex}.jpg"
-        shutil.copy(temp_path, os.path.join(UPLOAD_FOLDER, failed_filename))
-        failed_log = FailedScanLog(image_path=failed_filename, reason="No matching family member found in database")
-        db.session.add(failed_log)
-        db.session.commit()
+        try:
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+            failed_filename = f"failed_nomatch_{uuid.uuid4().hex}.jpg"
+            shutil.copy(temp_path, os.path.join(UPLOAD_FOLDER, failed_filename))
+            failed_log = FailedScanLog(image_path=failed_filename, reason="No matching family member found in database")
+            db.session.add(failed_log)
+            db.session.commit()
+        except Exception as log_err:
+            logger.warning(f"Failed to log no match scan: {log_err}")
+
         return jsonify({"error": "No matching family member found in the database"}), 404
         
     except Exception as e:
         logger.error(f"Error during facial recognition: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error during recognition"}), 500
+        return jsonify({"error": f"Recognition error: {str(e)}"}), 500
     finally:
         if os.path.exists(temp_path):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
 
 @api_bp.route('/family/<int:family_id>/mark_ration', methods=['POST'])
 def mark_ration(family_id):
