@@ -229,35 +229,40 @@ def _cleanup_saved_files(filenames):
                 pass
 
 def process_unprocessed_faces(family_id=None):
-    """Processes any faces that do not have an embedding vector yet."""
+    """Processes any faces that do not have a valid 128-dim embedding vector yet."""
     try:
-        query = FaceData.query.filter(
-            (FaceData.face_embedding_vector == None) |
-            (FaceData.face_embedding_vector == "") |
-            (FaceData.face_embedding_vector == "NO_FACE")
-        )
-        if family_id:
-            query = query.filter_by(family_id=family_id)
-            
-        unprocessed = query.all()
+        all_faces = FaceData.query.all()
         processed_count = 0
-        if not unprocessed:
-            return 0
-            
         import face_utils
-        for face in unprocessed:
-            full_path = os.path.join(UPLOAD_FOLDER, face.face_image_path)
-            if os.path.exists(full_path):
-                embedding = face_utils.extract_embedding(full_path)
-                if embedding is not None:
-                    face.face_embedding_vector = json.dumps(embedding)
-                    processed_count += 1
-                else:
-                    logger.warning(f"Failed to extract embedding for face {face.face_id}")
-                    face.face_embedding_vector = "NO_FACE"
+        for face in all_faces:
+            if family_id and face.family_id != family_id:
+                continue
+
+            need_reprocess = False
+            vec_str = face.face_embedding_vector
+            if not vec_str or vec_str in ["", "NO_FACE", "FAILED", "null"]:
+                need_reprocess = True
             else:
-                logger.warning(f"Image path does not exist for face {face.face_id}: {full_path}")
-                face.face_embedding_vector = "NO_FACE"
+                try:
+                    emb = json.loads(vec_str)
+                    if not isinstance(emb, list) or len(emb) != 128:
+                        need_reprocess = True
+                except Exception:
+                    need_reprocess = True
+                    
+            if need_reprocess:
+                full_path = os.path.join(UPLOAD_FOLDER, face.face_image_path)
+                if os.path.exists(full_path):
+                    embedding = face_utils.extract_embedding(full_path)
+                    if embedding is not None:
+                        face.face_embedding_vector = json.dumps(embedding)
+                        processed_count += 1
+                    else:
+                        logger.warning(f"Failed to extract embedding for face {face.face_id}")
+                        face.face_embedding_vector = "NO_FACE"
+                else:
+                    logger.warning(f"Image path does not exist for face {face.face_id}: {full_path}")
+                    face.face_embedding_vector = "NO_FACE"
                     
         db.session.commit()
         refresh_face_cache()
