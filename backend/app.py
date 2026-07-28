@@ -10,6 +10,19 @@ deepface_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deepfac
 os.makedirs(deepface_dir, exist_ok=True)
 os.environ['DEEPFACE_HOME'] = deepface_dir
 
+# Ensure opencv-python-headless is used and libGL error is gracefully resolved
+try:
+    import cv2
+except ImportError as e:
+    if 'libGL' in str(e):
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "opencv-python", "opencv-contrib-python"], capture_output=True)
+            subprocess.run([sys.executable, "-m", "pip", "install", "opencv-python-headless==4.10.0.84"], capture_output=True)
+            import cv2
+        except Exception as fix_err:
+            print("Failed to auto-repair opencv-python-headless:", fix_err)
+
 # Set UTF-8 encoding for standard output and standard error to prevent DeepFace logging crashes on Windows
 try:
     if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
