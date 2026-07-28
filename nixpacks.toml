@@ -1,10 +1,11 @@
 providers = ["python"]
 
 [phases.setup]
-nixPkgs = ["python310"]
+nixPkgs = ["python310", "libGL", "glib", "freeglut"]
+aptPkgs = ["libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = ["pip install -r requirements.txt", "pip uninstall -y opencv-python || true", "pip install --force-reinstall opencv-python-headless==4.10.0.84"]
 
 [start]
 cmd = "sh -c \"if [ -d backend ]; then cd backend; fi; exec gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120\""
