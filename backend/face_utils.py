@@ -1,9 +1,16 @@
 import logging
-import cv2
 import os
 import tempfile
 import numpy as np
 import gc
+from PIL import Image, ImageEnhance
+
+try:
+    import cv2
+except Exception as cv_err:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"OpenCV import deferred or failed: {cv_err}")
+    cv2 = None
 
 try:
     import psutil
@@ -28,50 +35,27 @@ def log_memory(step_name):
 
 def enhance_image(image_path: str):
     """
-    Enhance brightness for low-light images.
+    Enhance brightness for low-light images using PIL.
     Returns temporary enhanced image path.
     """
-
     temp_path = None
-
     try:
-        img = cv2.imread(image_path)
-
-        if img is None:
-            logger.error(f"Could not read image: {image_path}")
-            return None
-
-        # Convert to HSV
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-        h, s, v = cv2.split(hsv)
-
-        # Increase brightness safely (scalar, not array)
-        v = cv2.add(v, 40)
-
-        final_hsv = cv2.merge((h, s, v))
-
-        enhanced_img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
-
-        # Create temp file
-        fd, temp_path = tempfile.mkstemp(suffix=".jpg")
-
-        os.close(fd)
-
-        cv2.imwrite(temp_path, enhanced_img)
-
-        return temp_path
-
+        with Image.open(image_path) as img:
+            img_rgb = img.convert('RGB')
+            enhancer = ImageEnhance.Brightness(img_rgb)
+            enhanced_img = enhancer.enhance(1.35)
+            
+            fd, temp_path = tempfile.mkstemp(suffix=".jpg")
+            os.close(fd)
+            enhanced_img.save(temp_path, format='JPEG', quality=85)
+            return temp_path
     except Exception as e:
         logger.error(f"Image enhancement failed: {e}")
-
-        # Cleanup if partially created
         if temp_path and os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
             except Exception:
                 pass
-
         return None
 
 
@@ -121,30 +105,28 @@ def compare_embeddings(emb1, emb2, threshold: float = 0.58):
 
 def extract_embedding(image_path: str):
     """
-    Extract face embedding with lazy loading of DeepFace.
+    Extract face embedding with lazy loading of DeepFace and PIL image reading.
     """
     logger.info(f"Starting face extraction for: {image_path}")
     log_memory("Before Image Decoding")
 
+    img_np = None
     try:
-        img = cv2.imread(image_path)
-        log_memory("After Image Decoding")
+        with Image.open(image_path) as img:
+            img = img.convert('RGB')
+            w, h = img.size
+            max_dim = 640
+            if h > max_dim or w > max_dim:
+                scale = max_dim / max(h, w)
+                new_size = (int(w * scale), int(h * scale))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+                try:
+                    img.save(image_path, format='JPEG', quality=80)
+                except Exception:
+                    pass
+            img_np = np.array(img)
 
-        if img is None:
-            raise ValueError(f"Failed to read image: {image_path}")
-
-        # Downscale image to max 640x640 to prevent OOM crashes
-        max_dim = 640
-        h, w = img.shape[:2]
-        if h > max_dim or w > max_dim:
-            scale = max_dim / max(h, w)
-            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-            cv2.imwrite(image_path, img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-            logger.info(f"Image resized to prevent OOM. New Shape: {img.shape}")
-            
-        log_memory("After Image Resizing")
-        logger.info("Trying OpenCV detector...")
-        log_memory("Before DeepFace.represent")
+        log_memory("After Image Resizing with PIL")
 
         # Lazy load DeepFace
         deepface_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deepface_home')
@@ -155,54 +137,47 @@ def extract_embedding(image_path: str):
 
         gc.collect()
         objs = None
+
+        # Primary strategy: Pass numpy array directly with detector_backend="skip" (No libGL / cv2 required!)
         try:
             objs = DeepFace.represent(
-                img_path=image_path,
+                img_path=img_np,
                 model_name="Facenet",
-                detector_backend="opencv",
-                enforce_detection=True,
-                align=True
+                detector_backend="skip",
+                enforce_detection=False,
+                align=False
             )
-        except Exception as e:
-            logger.warning(f"OpenCV enforce_detection failed: {e}. Trying enforce_detection=False...")
+        except Exception as e1:
+            logger.warning(f"DeepFace skip representation failed: {e1}. Trying image_path with opencv...")
             try:
                 objs = DeepFace.represent(
                     img_path=image_path,
                     model_name="Facenet",
                     detector_backend="opencv",
                     enforce_detection=False,
-                    align=True
+                    align=False
                 )
             except Exception as e2:
-                logger.warning(f"Fallback opencv failed: {e2}. Trying detector_backend=skip...")
-                try:
-                    objs = DeepFace.represent(
-                        img_path=image_path,
-                        model_name="Facenet",
-                        detector_backend="skip",
-                        enforce_detection=False,
-                        align=False
-                    )
-                except Exception as e3:
-                    logger.error(f"Skip backend detection failed: {e3}")
-        
+                logger.error(f"All DeepFace representation strategies failed: {e2}")
+
         log_memory("After DeepFace.represent")
 
         if objs and len(objs) > 0:
             logger.info("Face detected successfully.")
             embedding = objs[0]["embedding"]
             del objs
-            del img
+            del img_np
             gc.collect()
             return embedding
         else:
-            logger.warning("No face found in image.")
+            logger.warning("No face embedding extracted.")
             return None
 
     except Exception as e:
-        logger.error(f"Extraction error: {e}")
+        logger.error(f"Extraction error: {e}", exc_info=True)
         try:
-            del img
+            if img_np is not None:
+                del img_np
             gc.collect()
         except Exception:
             pass
