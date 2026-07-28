@@ -50,6 +50,18 @@ def save_base64_image_temp(base64_str: str) -> str:
 FACE_CACHE = []
 CACHE_INITIALIZED = False
 
+def extract_and_format_embedding(filepath: str) -> str:
+    """Extract face embedding vector and return JSON string or 'NO_FACE'."""
+    try:
+        if os.path.exists(filepath):
+            import face_utils
+            emb = face_utils.extract_embedding(filepath)
+            if emb is not None:
+                return json.dumps(emb)
+    except Exception as e:
+        logger.warning(f"Error extracting embedding for {filepath}: {e}")
+    return "NO_FACE"
+
 def refresh_face_cache():
     global FACE_CACHE, CACHE_INITIALIZED
     try:
@@ -155,11 +167,13 @@ def register_family():
                             
                 saved_files.append(saved_filename)
                 
-                # Save uploaded image directly to FaceData (AI processing removed from registration)
+                full_path = os.path.join(UPLOAD_FOLDER, saved_filename)
+                embedding_vector = extract_and_format_embedding(full_path)
+                
                 face_data = FaceData(
                     member_id=new_member.member_id,
                     family_id=new_family.family_id,
-                    face_embedding_vector="",
+                    face_embedding_vector=embedding_vector,
                     face_image_path=saved_filename
                 )
                 db.session.add(face_data)
@@ -167,7 +181,8 @@ def register_family():
         logger.info("Members saved")
         logger.info("Images saved")
         db.session.commit()
-        logger.info("Database committed")
+        refresh_face_cache()
+        logger.info("Database committed and face cache refreshed")
         
         logger.info(f"Family registered successfully with ID: {new_family.family_id}")
         logger.info("Registration completed")
@@ -796,10 +811,15 @@ def add_member_face(member_id):
         filename = f"{member.family_id}_{member.member_id}_{uuid.uuid4().hex[:8]}.jpg"
         
         saved_filename = save_base64_image_permanent(img_b64, filename)
+        full_path = os.path.join(UPLOAD_FOLDER, saved_filename)
+        
+        # Extract face embedding for instant recognition
+        embedding_vector = extract_and_format_embedding(full_path)
+        
         face_data = FaceData(
             member_id=member.member_id,
             family_id=member.family_id,
-            face_embedding_vector=None,
+            face_embedding_vector=embedding_vector,
             face_image_path=saved_filename
         )
         db.session.add(face_data)
@@ -817,7 +837,7 @@ def add_member_face(member_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Failed to add face for member {member_id}: {e}", exc_info=True)
-        return jsonify({"error": "Failed to process image"}), 500
+        return jsonify({"error": f"Failed to process image: {str(e)}"}), 500
 
 @api_bp.route('/chat', methods=['POST'])
 def chat():

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { Users, Search, Edit2, Trash2, ChevronDown, ChevronUp, UserX, UserMinus, ShieldAlert, Check, X, Loader2, UserPlus, Camera, ImagePlus, RefreshCcw } from 'lucide-react';
+import { Users, Search, Edit2, Trash2, ChevronDown, ChevronUp, UserX, UserMinus, ShieldAlert, Check, X, Loader2, UserPlus, Camera, ImagePlus, RefreshCcw, Upload } from 'lucide-react';
 import Webcam from 'react-webcam';
 export default function FamiliesPage() {
     const [families, setFamilies] = useState([]);
@@ -23,6 +23,8 @@ export default function FamiliesPage() {
     const [isAddingFace, setIsAddingFace] = useState(false);
     const [isSavingFace, setIsSavingFace] = useState(false);
     const [facingMode, setFacingMode] = useState("user");
+    const memberFileInputRef = useRef(null);
+    const newMemberFileInputRef = useRef(null);
     const memberWebcamRef = useRef(null);
     const webcamRef = useRef(null);
 
@@ -89,6 +91,8 @@ export default function FamiliesPage() {
         const imageSrc = memberWebcamRef.current?.getScreenshot();
         if (imageSrc) {
             saveNewFace(imageSrc);
+        } else {
+            alert("Unable to capture from camera. Please ensure camera is active.");
         }
     };
 
@@ -97,7 +101,7 @@ export default function FamiliesPage() {
         try {
             const res = await axios.post(`/api/family_members/${selectedMember.member_id}/face`, { image: imageSrc });
             const newFace = res.data.face;
-            setSelectedMember({...selectedMember, images: [...(selectedMember.images || []), newFace]});
+            setSelectedMember(prev => ({...prev, images: [...(prev.images || []), newFace]}));
             fetchFamilies();
             setIsAddingFace(false);
         } catch(err) {
@@ -106,6 +110,51 @@ export default function FamiliesPage() {
         } finally {
             setIsSavingFace(false);
         }
+    };
+
+    const handleFileUploadForSelectedMember = async (event) => {
+        const files = Array.from(event.target.files);
+        if (files.length === 0) return;
+
+        setIsSavingFace(true);
+        try {
+            for (const file of files) {
+                const reader = new FileReader();
+                const imageSrc = await new Promise((resolve, reject) => {
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsDataURL(file);
+                });
+
+                const res = await axios.post(`/api/family_members/${selectedMember.member_id}/face`, { image: imageSrc });
+                const newFace = res.data.face;
+                setSelectedMember(prev => ({
+                    ...prev,
+                    images: [...(prev.images || []), newFace]
+                }));
+            }
+            fetchFamilies();
+            setIsAddingFace(false);
+            alert("Photo(s) uploaded successfully from device!");
+        } catch (err) {
+            console.error("Failed to upload face image from device", err);
+            alert(err.response?.data?.error || "Failed to upload face image.");
+        } finally {
+            setIsSavingFace(false);
+            event.target.value = '';
+        }
+    };
+
+    const handleDeviceUploadForNewMember = (event) => {
+        const files = Array.from(event.target.files);
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setNewMemberImages(prev => [...prev, e.target.result]);
+            };
+            reader.readAsDataURL(file);
+        });
+        event.target.value = '';
     };
 
     const capture = useCallback(() => {
@@ -549,32 +598,55 @@ export default function FamiliesPage() {
                                     <Camera size={18} className="mr-2 text-blue-500" /> 
                                     Registered Face Images ({selectedMember.images?.length || 0})
                                 </h4>
-                                {!isAddingFace && (
-                                    <button onClick={() => setIsAddingFace(true)} className="text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center transition-colors">
-                                        <ImagePlus size={16} className="mr-1.5" /> Add Image
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="file" 
+                                        ref={memberFileInputRef} 
+                                        accept="image/*" 
+                                        multiple 
+                                        className="hidden" 
+                                        onChange={handleFileUploadForSelectedMember} 
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => memberFileInputRef.current?.click()} 
+                                        disabled={isSavingFace}
+                                        className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg flex items-center transition-colors disabled:opacity-50"
+                                    >
+                                        <Upload size={14} className="mr-1.5" /> Upload from Device
                                     </button>
-                                )}
+                                    {!isAddingFace && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsAddingFace(true)} 
+                                            className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center transition-colors"
+                                        >
+                                            <Camera size={14} className="mr-1.5" /> Webcam Snap
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
-                                {isAddingFace && (
-                                    <div className="mb-6 bg-zinc-900 rounded-2xl overflow-hidden relative shadow-lg">
-                                        <Webcam 
-                                            audio={false} 
-                                            ref={memberWebcamRef} 
-                                            screenshotFormat="image/jpeg" 
-                                            videoConstraints={{ width: 640, height: 480, facingMode: facingMode }}
-                                            className="w-full" 
-                                        />
-                                        <button
-                                            onClick={toggleCamera}
-                                            className="absolute top-2 right-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all"
-                                            title="Switch Camera"
-                                        >
-                                            <RefreshCcw size={16} />
-                                        </button>
-                                        <div className="absolute bottom-4 inset-x-0 flex justify-center gap-3">
-                                        <button onClick={() => setIsAddingFace(false)} className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white px-4 py-2 rounded-full font-bold text-sm transition-colors">Cancel</button>
-                                        <button onClick={handleCaptureNewFace} disabled={isSavingFace} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-full font-bold text-sm flex items-center shadow-lg transition-colors disabled:opacity-50">
+                            {isAddingFace && (
+                                <div className="mb-6 bg-zinc-900 rounded-2xl overflow-hidden relative shadow-lg">
+                                    <Webcam 
+                                        audio={false} 
+                                        ref={memberWebcamRef} 
+                                        screenshotFormat="image/jpeg" 
+                                        videoConstraints={{ width: 640, height: 480, facingMode: facingMode }}
+                                        className="w-full" 
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={toggleCamera}
+                                        className="absolute top-2 right-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all"
+                                        title="Switch Camera"
+                                    >
+                                        <RefreshCcw size={16} />
+                                    </button>
+                                    <div className="absolute bottom-4 inset-x-0 flex justify-center gap-3">
+                                        <button type="button" onClick={() => setIsAddingFace(false)} className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white px-4 py-2 rounded-full font-bold text-sm transition-colors">Cancel</button>
+                                        <button type="button" onClick={handleCaptureNewFace} disabled={isSavingFace} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-full font-bold text-sm flex items-center shadow-lg transition-colors disabled:opacity-50">
                                             {isSavingFace ? <Loader2 size={16} className="animate-spin mr-1.5" /> : <Camera size={16} className="mr-1.5" />} Capture & Save
                                         </button>
                                     </div>

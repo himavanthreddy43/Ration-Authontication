@@ -1,6 +1,6 @@
 import Webcam from 'react-webcam';
 import axios from 'axios';
-import { Camera, UserPlus, CheckCircle2, User, HelpCircle, X, Loader2, ImagePlus, RefreshCcw } from 'lucide-react';
+import { Camera, UserPlus, CheckCircle2, User, HelpCircle, X, Loader2, ImagePlus, RefreshCcw, Upload } from 'lucide-react';
 import { useState, useRef, useCallback } from 'react';
 
 export default function RegisterPage() {
@@ -23,9 +23,26 @@ export default function RegisterPage() {
     });
     const [capturedImages, setCapturedImages] = useState([]);
     const [facingMode, setFacingMode] = useState("user");
+    const fileInputRef = useRef(null);
 
     const toggleCamera = () => {
         setFacingMode(prev => prev === "user" ? "environment" : "user");
+    };
+
+    const handleDeviceUploadForRegisterMember = (event) => {
+        const files = Array.from(event.target.files);
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageSrc = e.target.result;
+                setCapturedImages(prev => [...prev, {
+                    serverFilename: imageSrc,
+                    previewUrl: imageSrc
+                }]);
+            };
+            reader.readAsDataURL(file);
+        });
+        event.target.value = '';
     };
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -302,15 +319,31 @@ export default function RegisterPage() {
                                         </div>
                                     </div>
 
-                                    {/* Dedicated Snap Control */}
-                                    <div className="flex justify-center pt-1">
+                                     {/* Dedicated Snap Control & File Upload */}
+                                    <div className="flex flex-col sm:flex-row justify-center gap-3 pt-1">
+                                        <input 
+                                            type="file" 
+                                            ref={fileInputRef} 
+                                            accept="image/*" 
+                                            multiple 
+                                            className="hidden" 
+                                            onChange={handleDeviceUploadForRegisterMember} 
+                                        />
                                         <button
                                             type="button"
                                             onClick={capture}
-                                            className="w-full sm:w-auto bg-blue-600 text-white font-semibold px-6 py-3 rounded-xl flex items-center justify-center space-x-2 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all"
+                                            className="flex-1 bg-blue-600 text-white font-semibold px-5 py-3 rounded-xl flex items-center justify-center space-x-2 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all"
                                         >
                                             <Camera size={20} />
-                                            <span>Take Snap ({capturedImages.length} captured)</span>
+                                            <span>Take Snap</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="flex-1 bg-emerald-600 text-white font-semibold px-5 py-3 rounded-xl flex items-center justify-center space-x-2 hover:bg-emerald-700 shadow-md shadow-emerald-500/20 transition-all"
+                                        >
+                                            <Upload size={20} />
+                                            <span>Upload from Device</span>
                                         </button>
                                     </div>
 
