@@ -159,7 +159,7 @@ def register_family():
                 face_data = FaceData(
                     member_id=new_member.member_id,
                     family_id=new_family.family_id,
-                    face_embedding_vector=None,
+                    face_embedding_vector="",
                     face_image_path=saved_filename
                 )
                 db.session.add(face_data)
@@ -183,7 +183,10 @@ def register_family():
         db.session.rollback()
         _cleanup_saved_files(saved_files)
         logger.warning(f"Database integrity error: {ie}")
-        return jsonify({"error": "A family with this ration card number is already registered. Please use a different ration card number."}), 400
+        err_msg = str(ie).lower()
+        if 'ration_card_number' in err_msg or 'families.ration_card_number' in err_msg:
+            return jsonify({"error": "A family with this ration card number is already registered. Please use a different ration card number."}), 400
+        return jsonify({"error": f"Database error: {str(ie)}"}), 400
     except OperationalError as oe:
         db.session.rollback()
         _cleanup_saved_files(saved_files)

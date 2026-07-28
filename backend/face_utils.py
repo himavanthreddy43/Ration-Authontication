@@ -4,16 +4,23 @@ import os
 import tempfile
 import numpy as np
 import gc
-import psutil
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 logger = logging.getLogger(__name__)
 
 def log_memory(step_name):
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    # RSS (Resident Set Size) in MB
-    rss_mb = mem_info.rss / (1024 * 1024)
-    logger.info(f"MEMORY [{step_name}]: {rss_mb:.2f} MB")
+    if psutil:
+        try:
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            rss_mb = mem_info.rss / (1024 * 1024)
+            logger.info(f"MEMORY [{step_name}]: {rss_mb:.2f} MB")
+        except Exception:
+            pass
 
 # ============================================
 # IMAGE ENHANCEMENT
