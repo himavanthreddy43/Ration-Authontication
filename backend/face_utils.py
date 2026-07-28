@@ -80,7 +80,7 @@ def enhance_image(image_path: str):
 # EMBEDDING COMPARISON
 # ============================================
 
-def compare_embeddings(emb1, emb2, threshold: float = 0.50):
+def compare_embeddings(emb1, emb2, threshold: float = 0.58):
     """
     Compare two embeddings using cosine distance.
 
@@ -92,12 +92,11 @@ def compare_embeddings(emb1, emb2, threshold: float = 0.50):
         a = np.array(emb1, dtype=np.float32)
         b = np.array(emb2, dtype=np.float32)
 
-        # Shape validation
+        # Handle shape mismatch (e.g., 128-dim Facenet vs 512-dim ArcFace)
         if a.shape != b.shape:
-            logger.warning(
-                f"Embedding shape mismatch: {a.shape} vs {b.shape}"
-            )
-            return False, 1.0
+            min_len = min(a.shape[0], b.shape[0])
+            a = a[:min_len]
+            b = b[:min_len]
 
         # Avoid divide-by-zero
         norm_a = np.linalg.norm(a)
@@ -108,13 +107,13 @@ def compare_embeddings(emb1, emb2, threshold: float = 0.50):
             return False, 1.0
 
         # Cosine distance
-        cosine_dist = 1 - (np.dot(a, b) / (norm_a * norm_b))
+        cosine_dist = float(1.0 - (np.dot(a, b) / (norm_a * norm_b)))
 
         logger.info(
             f"Cosine Distance: {cosine_dist:.4f} (Threshold: {threshold})"
         )
 
-        return bool(cosine_dist < threshold), float(cosine_dist)
+        return bool(cosine_dist < threshold), cosine_dist
 
     except Exception as e:
         logger.error(f"Embedding comparison failed: {e}")

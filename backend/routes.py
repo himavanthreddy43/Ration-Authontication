@@ -69,15 +69,17 @@ def refresh_face_cache():
         new_cache = []
         for face in all_faces:
             try:
-                if not face.face_embedding_vector or face.face_embedding_vector in ["NO_FACE", "FAILED"]:
+                vec_str = face.face_embedding_vector
+                if not vec_str or vec_str in ["NO_FACE", "FAILED", "", "null"]:
                     continue
-                emb = json.loads(face.face_embedding_vector)
-                new_cache.append({
-                    'face_id': face.face_id,
-                    'member_id': face.member_id,
-                    'family_id': face.family_id,
-                    'embedding': emb
-                })
+                emb = json.loads(vec_str)
+                if isinstance(emb, list) and len(emb) > 0:
+                    new_cache.append({
+                        'face_id': face.face_id,
+                        'member_id': face.member_id,
+                        'family_id': face.family_id,
+                        'embedding': emb
+                    })
             except Exception as e:
                 logger.error(f"Error parsing face embedding {face.face_id}: {e}")
         FACE_CACHE = new_cache
@@ -285,6 +287,17 @@ def recognize():
     try:
         import face_utils
         scanned_embedding = face_utils.extract_embedding(temp_path)
+        
+        # Fallback to enhanced image if initial detection fails (e.g. low light / shadows)
+        if scanned_embedding is None:
+            enhanced_path = face_utils.enhance_image(temp_path)
+            if enhanced_path:
+                scanned_embedding = face_utils.extract_embedding(enhanced_path)
+                try:
+                    os.remove(enhanced_path)
+                except Exception:
+                    pass
+                    
         if scanned_embedding is None:
             import shutil
             failed_filename = f"failed_noface_{uuid.uuid4().hex}.jpg"
@@ -295,7 +308,7 @@ def recognize():
             return jsonify({"error": "No face detected in the provided image"}), 400
             
         global CACHE_INITIALIZED
-        if not CACHE_INITIALIZED:
+        if not CACHE_INITIALIZED or len(FACE_CACHE) == 0:
             refresh_face_cache()
             
         matched_member_id = None
