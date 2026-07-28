@@ -5,6 +5,10 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 # Suppress TensorFlow CUDA/GPU logs (must be set before TF import)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# Set DEEPFACE_HOME to a writable local directory inside backend
+deepface_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deepface_home')
+os.makedirs(deepface_dir, exist_ok=True)
+os.environ['DEEPFACE_HOME'] = deepface_dir
 
 # Set UTF-8 encoding for standard output and standard error to prevent DeepFace logging crashes on Windows
 try:

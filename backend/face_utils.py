@@ -147,6 +147,10 @@ def extract_embedding(image_path: str):
         log_memory("Before DeepFace.represent")
 
         # Lazy load DeepFace
+        deepface_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deepface_home')
+        os.makedirs(deepface_dir, exist_ok=True)
+        os.environ['DEEPFACE_HOME'] = deepface_dir
+
         from deepface import DeepFace
 
         gc.collect()
@@ -170,7 +174,17 @@ def extract_embedding(image_path: str):
                     align=True
                 )
             except Exception as e2:
-                logger.error(f"Fallback detection failed: {e2}")
+                logger.warning(f"Fallback opencv failed: {e2}. Trying detector_backend=skip...")
+                try:
+                    objs = DeepFace.represent(
+                        img_path=image_path,
+                        model_name="Facenet",
+                        detector_backend="skip",
+                        enforce_detection=False,
+                        align=False
+                    )
+                except Exception as e3:
+                    logger.error(f"Skip backend detection failed: {e3}")
         
         log_memory("After DeepFace.represent")
 
@@ -182,7 +196,8 @@ def extract_embedding(image_path: str):
             gc.collect()
             return embedding
         else:
-            raise ValueError("No face found in image.")
+            logger.warning("No face found in image.")
+            return None
 
     except Exception as e:
         logger.error(f"Extraction error: {e}")

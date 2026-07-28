@@ -4,27 +4,31 @@ import { ScanFace, Check, XCircle, Search, ArrowRight, Loader2, PackageCheck, Pa
 import { useState, useRef, useCallback } from 'react';
 
 export default function RecognizePage() {
+    const webcamRef = useRef(null);
     const [status, setStatus] = useState('idle'); // idle, scanning, success, failed
     const [familyDetails, setFamilyDetails] = useState(null);
+    const [scanError, setScanError] = useState('');
     const [facingMode, setFacingMode] = useState("user");
-    const webcamRef = useRef(null);
 
     const toggleCamera = () => {
         setFacingMode(prev => prev === "user" ? "environment" : "user");
     };
 
     const scanFace = async () => {
-        const imageSrc = webcamRef.current.getScreenshot();
+        const imageSrc = webcamRef.current?.getScreenshot();
         if (!imageSrc) return alert('Failed to capture image');
 
         setStatus('scanning');
+        setScanError('');
 
         try {
             const res = await axios.post('/api/recognize', { image: imageSrc });
             setFamilyDetails(res.data);
             setStatus('success');
         } catch (error) {
-            console.error(error);
+            console.error("Scan face error:", error);
+            const errMsg = error.response?.data?.error || error.message || 'No matching family member found';
+            setScanError(errMsg);
             setStatus('failed');
         }
     };
@@ -195,8 +199,12 @@ export default function RecognizePage() {
                             <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg shadow-rose-200 mb-6">
                                 <XCircle size={48} strokeWidth={2} className="text-rose-500" />
                             </div>
-                            <h3 className="text-2xl font-black text-rose-900">No Match Found</h3>
-                            <p className="mt-3 text-lg text-rose-700 max-w-sm font-medium leading-relaxed">The scanned face did not match any registered family members. Please ensure lighting is good and try again.</p>
+                            <h3 className="text-2xl font-black text-rose-900">
+                                {scanError ? 'Recognition Failed' : 'No Match Found'}
+                            </h3>
+                            <p className="mt-3 text-lg text-rose-700 max-w-sm font-medium leading-relaxed">
+                                {scanError || "The scanned face did not match any registered family members. Please ensure lighting is good and try again."}
+                            </p>
                             <button
                                 onClick={() => setStatus('idle')}
                                 className="mt-8 px-8 py-3 bg-white text-rose-600 font-bold rounded-xl border border-rose-200 hover:bg-rose-100 shadow-sm transition-colors"
